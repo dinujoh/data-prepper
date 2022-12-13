@@ -7,7 +7,7 @@ AWS_ROLE="Admin"
 CLUSTER_ARN="FizzyDrPepper-EcsCluster-beta-us-west-2-cell1-ClusterEB0386A7-ONeX6WBBCaOI"
 CODE_DEPLOY_APPLICATION="FizzyDrPepper-CodeDeploy-beta-us-west-2-cell1-CodeDeployApplicationE587C27C-1N81S1EQ1THQJ"
 DEFAULT_VPC="vpc-0101c717279e5c7d3"
-BASE_VPC="vpc-0a58321cf6998f584"
+BASE_VPC="vpc-0a1a6280e2983da95"
 
 ada credentials update --account=$AWS_ACCOUNT --provider=isengard --role=$AWS_ROLE --once
 
@@ -132,35 +132,35 @@ do
     $AWS iam delete-role --role-name "${IAM_ROLE}"
 done
 
-ROUTE_TABLE_LIST=($($AWS ec2 describe-route-tables | jq '.RouteTables[] | .RouteTableId' | tr -d '"'))
+ROUTE_TABLE_LIST=($($AWS ec2 describe-route-tables | jq '.RouteTables[] | select(.VpcId != "${DEFAULT_VPC}" and .VpcId != "${BASE_VPC}") | .RouteTableId' | tr -d '"'))
 for ROUTE_TABLE in "${ROUTE_TABLE_LIST[@]}"
 do
     echo "Deleting route table ${ROUTE_TABLE} route 0.0.0.0/0"
     $AWS ec2 delete-route --route-table-id "${ROUTE_TABLE}" --destination-cidr-block "0.0.0.0/0"
 done
 
-NAT_GATEWAY_LIST=($($AWS ec2 describe-nat-gateways | jq '.NatGateways[] | .NatGatewayId' | tr -d '"'))
+NAT_GATEWAY_LIST=($($AWS ec2 describe-nat-gateways | jq '.NatGateways[] | select(.VpcId != "${DEFAULT_VPC}" and .VpcId != "${BASE_VPC}") | .NatGatewayId' | tr -d '"'))
 for NAT_GATEWAY in "${NAT_GATEWAY_LIST[@]}"
 do
     echo "Deleting NAT gateway ${NAT_GATEWAY}"
     $AWS ec2 delete-nat-gateway --nat-gateway-id "${NAT_GATEWAY}"
 done
 
-EIP_ASSOCIATION_LIST=($($AWS ec2 describe-addresses | jq '.Addresses[] | .AssociationId' | tr -d '"'))
+EIP_ASSOCIATION_LIST=($($AWS ec2 describe-addresses | jq '.Addresses[] | select((.Tags[] | select(.Key | contains("aws:cloudformation:stack-name"))) == 0) | .AssociationId' | tr -d '"'))
 for ASSOCIATION in "${EIP_ASSOCIATION_LIST[@]}"
 do
     echo "Disassociate association ${ASSOCIATION}"
     $AWS ec2 disassociate-address --association-id "${ASSOCIATION}"
 done
 
-EIP_ALLOCATION_LIST=($($AWS ec2 describe-addresses | jq '.Addresses[] | .AllocationId' | tr -d '"'))
+EIP_ALLOCATION_LIST=($($AWS ec2 describe-addresses | jq '.Addresses[] | select((.Tags[] | select(.Key | contains("aws:cloudformation:stack-name"))) == 0) | .AssociationId' | tr -d '"'))
 for ALLOCATION in "${EIP_ALLOCATION_LIST[@]}"
 do
     echo "Releasing allocation ${ALLOCATION}"
     $AWS ec2 release-address --allocation-id "${ALLOCATION}"
 done
 
-INTERNET_GATEWAY_LIST=($($AWS ec2 describe-internet-gateways | jq '.InternetGateways[] | select((.Attachments[] | select(.VpcId != "vpc-4b0abe36")) != 0) | .InternetGatewayId' | tr -d '"'))
+INTERNET_GATEWAY_LIST=($($AWS ec2 describe-internet-gateways | jq '.InternetGateways[] | select((.Attachments[] | select(.VpcId != "${DEFAULT_VPC}" and .VpcId != "${BASE_VPC}")) != 0) | .InternetGatewayId' | tr -d '"'))
 for INTERNET_GATEWAY in "${INTERNET_GATEWAY_LIST[@]}"
 do
     VPC_ID=($($AWS ec2 describe-internet-gateways --internet-gateway-ids "${INTERNET_GATEWAY}" | jq '.InternetGateways[] | .Attachments[] | .VpcId' | tr -d '"'))
@@ -177,7 +177,7 @@ do
     $AWS ec2 delete-subnet --subnet-id "${SUBNET}"
 done
 
-ROUTE_TABLE_LIST=($($AWS ec2 describe-route-tables | jq '.RouteTables[] | .RouteTableId' | tr -d '"'))
+ROUTE_TABLE_LIST=($($AWS ec2 describe-route-tables | jq '.RouteTables[] | select(.VpcId != "${DEFAULT_VPC}" and .VpcId != "${BASE_VPC}") | .RouteTableId' | tr -d '"'))
 for ROUTE_TABLE in "${ROUTE_TABLE_LIST[@]}"
 do
     echo "Deleting route table ${ROUTE_TABLE}"
@@ -189,4 +189,11 @@ for VPC in "${VPC_LIST[@]}"
 do
     echo "Deleting vpc ${VPC}"
     $AWS ec2 delete-vpc --vpc-id "${VPC}"
+done
+
+SERVICE_DISCOVERY_LIST=$($(AWS servicediscovery list-services | jq '.Services[] | .Id' | tr -d '"'))
+for SERVICE_DISCOVERY in "${SERVICE_DISCOVERY_LIST[@]}"
+do
+    echo "Deleting service discovery service ${SERVICE_DISCOVERY}"
+    $AWS servicediscovery delete-service --id "$SERVICE_DISCOVERY"
 done
