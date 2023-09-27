@@ -5,10 +5,10 @@ import boto3
 import subprocess
 
 
-def transfer_messages(boto3_session, source_queue_url, destination_queue_url):
+def transfer_messages(boto3_session, source_queue_url, destination_queue_url, region):
 
     # Initialize the SQS client
-    sqs = boto3.client('sqs')
+    sqs = boto3.client('sqs', region_name=region)
 
     while True:
         # Receive messages from the source queue
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     session = setup_credentials(args.account, args.region, args.role, args.sim)
-    transfer_messages(session, args.source_queue_url, args.destination_queue_url)
+    transfer_messages(session, args.source_queue_url, args.destination_queue_url, args.region)
