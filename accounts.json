@@ -1,0 +1,198 @@
+[
+  {
+    "Resource": "arn:aws:iam::488939961373:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::250245820245:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::024043984225:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::321843683841:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::793214851599:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::494103247145:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::650455509444:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::647705926003:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::110293142570:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::642133779026:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::445771684395:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::008739254458:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::766161543942:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::706976067050:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::059841243330:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::332700493865:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::434348002068:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::463979154840:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::053747763961:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::961188132508:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::119299501364:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::974168036842:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::780344102579:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::660770330712:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::216799886647:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::982118959693:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::716399342947:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::994843801819:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::589200122578:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::097292218459:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::067846619083:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::355585272234:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::542540229200:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::937876418267:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::894313991277:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::894581090537:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::145248543401:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::131445043692:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::378951213220:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::662240664340:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::453840224354:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::309881782262:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::895835039025:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::897575397692:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::005290930114:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::890396593034:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::870574976409:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::583497257897:role/Admin",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::977404047420:role/Admin",
+    "Action": "*"
+  }
+]

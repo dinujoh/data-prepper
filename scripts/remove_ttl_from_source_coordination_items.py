@@ -19,7 +19,6 @@ Run the script on a specific stage or region:
 python3 remove_ttl_from_source_coordination_items.py --mcm MCM-12345 --region us-east-1 --stage prod
 """
 
-
 PIPELINE_CONFIG_TABLE = "DataPrepperPipelineConfigurations"
 PIPELINE_MAPPING_TABLE = "PipelineMapping"
 SOURCE_COORDINATION_TABLE = "DataPrepperSourceCoordinationStore"
@@ -51,7 +50,6 @@ REGION_CONFIG = {
 
 
 def main(stage, region, mcm):
-
     for stage_region, control_plane_account_id in REGION_CONFIG.items():
         actual_stage = stage_region.split(':')[0]
         actual_region = stage_region.split(':')[1]
@@ -72,7 +70,8 @@ def main(stage, region, mcm):
                     pipeline_configuration = pipeline[PIPELINE_CONFIGURATION_BODY]['S']
                     parsed_yaml_config = yaml.safe_load(pipeline_configuration)
                     sub_pipeline_name = \
-                        [key for key in parsed_yaml_config.keys() if key != 'version' and key != 'pipeline_configurations'][
+                        [key for key in parsed_yaml_config.keys() if
+                         key != 'version' and key != 'pipeline_configurations'][
                             0]
                     source_name = [key for key in parsed_yaml_config[sub_pipeline_name]['source'].keys()][0]
 
@@ -81,9 +80,7 @@ def main(stage, region, mcm):
 
                     pipeline_mappings = query_pipeline_mappings(cp_ddb_client, pipeline['pipelineArn']['S'])
                     data_plane_cell_account_id = arnparse(pipeline_mappings['clusterArn']['S']).account_id
-                    if data_plane_cell_account_id not in seen_data_plane_cells:
-                        get_credentials_for_account(data_plane_cell_account_id, actual_region, actual_stage, mcm)
-                        seen_data_plane_cells.append(data_plane_cell_account_id)
+                    get_credentials_for_account(data_plane_cell_account_id, actual_region, actual_stage, mcm, 'Admin')
 
                     dp_session = boto3.Session()
                     dp_ddb_client = dp_session.client("dynamodb", region_name=actual_region)
@@ -100,15 +97,18 @@ def main(stage, region, mcm):
                     update_coordination_items_for_pipeline(dp_ddb_client, global_item_partition_key)
 
             except Exception as e:
-                print(f'Received an exception while checking pipeline {pipeline["pipelineArn"]["S"]}. Skipping for this pipeline')
+                print(
+                    f'Received an exception while checking pipeline {pipeline["pipelineArn"]["S"]}. Skipping for this pipeline')
                 print(e)
                 continue
 
 
-def get_credentials_for_account(account_id, stage, region, mcm):
+def get_credentials_for_account(account_id, stage, region, mcm, role_name=None):
     try:
         if stage == 'gamma' and region == 'us-east-1':
             setup_credentials(account_id, role_name='Admin-OneClick')
+        elif role_name is not None:
+            setup_credentials(account_id, mcm_id=mcm, role_name=role_name)
         elif stage == 'prod':
             setup_credentials(account_id, mcm_id=mcm, role_name='Ops-Oncall')
         else:
@@ -129,6 +129,8 @@ def setup_credentials(account_id, role_name='Admin', mcm_id=None):
     ]
     if mcm_id is not None:
         command += ['--mcm', mcm_id]
+
+    command += [' > /dev/null']
     subprocess.run(command, check=True)
 
 
@@ -199,7 +201,6 @@ def query_global_items(data_plane_ddb_client, partition_key):
 
 
 def remove_expiration_time_from_item(data_plane_ddb_client, item):
-
     data_plane_ddb_client.update_item(
         TableName=SOURCE_COORDINATION_TABLE,
         Key={
@@ -215,9 +216,12 @@ def remove_expiration_time_from_item(data_plane_ddb_client, item):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--stage", "-s", default=None, help="The stage of the pipelines to remove the expirationTime from")
-    argparser.add_argument("--region", "-r", default=None, help="The region of the pipelines to remove the expirationTime from")
-    argparser.add_argument("--mcm", default=None, help="specifies the MCM to access prod accounts (Ex: --mcm MCM-12345)")
+    argparser.add_argument("--stage", "-s", default=None,
+                           help="The stage of the pipelines to remove the expirationTime from")
+    argparser.add_argument("--region", "-r", default=None,
+                           help="The region of the pipelines to remove the expirationTime from")
+    argparser.add_argument("--mcm", default=None,
+                           help="specifies the MCM to access prod accounts (Ex: --mcm MCM-12345)")
     args = argparser.parse_args()
 
     main(args.stage, args.region, args.mcm)
