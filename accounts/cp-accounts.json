@@ -1,0 +1,62 @@
+[
+  {
+    "Resource": "arn:aws:iam::488939961373:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::250245820245:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::024043984225:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::321843683841:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::793214851599:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::494103247145:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::650455509444:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::647705926003:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::110293142570:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::642133779026:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::445771684395:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::008739254458:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::766161543942:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::706976067050:role/Ops-Oncall",
+    "Action": "*"
+  },
+  {
+    "Resource": "arn:aws:iam::059841243330:role/Ops-Oncall",
+    "Action": "*"
+  }
+]
