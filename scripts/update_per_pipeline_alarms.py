@@ -16,13 +16,13 @@ This is useful when a bug is found in the alarms and the alarms need to be recre
 we want to apply it to existing pipelines.
 
 1. Copy credentials for the control plane account
-2. Run the script: python3 update_per_pipeline_alarms.py --verbose --wait-time N
+2. Run the script: python3 update_per_pipeline_alarms.py --region R --verbose --wait-time N
 
 This script can also be used in to delete all per pipeline alarms. 
 This should only be done in extreme cases where there were issues with the alarm configuration.
 
 1. Copy credentials for the control plane account
-2. Run the script: python3 update_per_pipeline_alarms.py --delete-alarms --verbose --wait-time N
+2. Run the script: python3 update_per_pipeline_alarms.py --delete-alarms --region R --verbose --wait-time N
 
 Future extensions:
 - Add support for creating/deleting alarms for specific pipelines
@@ -30,10 +30,10 @@ Future extensions:
 """
 
 
-def main(delete_alarms, verbose, wait_time):
+def main(region, delete_alarms, verbose, wait_time):
 
-    lambda_client = boto3.client('lambda')
-    dynamodb_client = boto3.client('dynamodb')
+    lambda_client = boto3.client('lambda', region_name=region)
+    dynamodb_client = boto3.client('dynamodb', region_name=region)
 
     lambda_name = get_alarm_management_lambda(lambda_client, delete_alarms)
     print(f"Found lambda: {lambda_name}")
@@ -43,8 +43,13 @@ def main(delete_alarms, verbose, wait_time):
     if verbose:
         print(f"Found {len(active_pipelines)} active pipelines")
 
-    pipeline_table_entries = [(pipeline, get_pipeline_mappings(dynamodb_client, pipeline['pipelineArn']['S']))
-                              for pipeline in active_pipelines]
+    pipeline_table_entries = []
+    for pipeline in active_pipelines:
+        mapping_items = get_pipeline_mappings(dynamodb_client, pipeline['pipelineArn']['S'])
+        if mapping_items:
+            pipeline_table_entries.append((pipeline, mapping_items[0]))
+        else:
+            print(f"No mapping entry found for {pipeline['pipelineArn']['S']}")
 
     lambda_inputs = [build_lambda_input(pipeline_configuration, pipeline_mapping, delete_alarms)
                      for pipeline_configuration, pipeline_mapping in pipeline_table_entries]
@@ -97,7 +102,7 @@ def get_pipeline_mappings(dynamodb_client, pipeline_arn):
         ExpressionAttributeValues={":arn": {"S": pipeline_arn}}
     )
 
-    return response['Items'][0]
+    return response['Items']
 
 
 def build_lambda_input(pipeline_configuration, pipeline_mapping, delete_alarms):
@@ -144,10 +149,11 @@ def invoke_setup_monitoring_lambda(lambda_client, lambda_name, lambda_input):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
+    argparser.add_argument("--region", "-r", help="The full name of the region ex: 'us-west-2'", type=str)
     argparser.add_argument("--delete-alarms", "-d", help="Delete all per pipeline alarms", default=False, action="store_true")
     argparser.add_argument("--verbose", "-v", help="Output additional logging information", default=False, action="store_true")
     argparser.add_argument("--wait-time", "-t", help="Time in seconds to wait between invocations of the Lambda", type=int, default=10)
     args = argparser.parse_args()
 
-    main(args.delete_alarms, args.verbose, args.wait_time)
+    main(args.region, args.delete_alarms, args.verbose, args.wait_time)
 
