@@ -36,6 +36,7 @@ def transfer_messages(boto3_session, source_queue_url, destination_queue_url, re
                 QueueUrl=source_queue_url,
                 ReceiptHandle=message['ReceiptHandle']
             )
+        print(f"Moved {len(messages['Messages'])} message(s)")
 
 def setup_credentials(account_id, region, role_name, sim_ticket_id=None):
     command = [
