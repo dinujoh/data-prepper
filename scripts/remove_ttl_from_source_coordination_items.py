@@ -71,7 +71,7 @@ def main(stage, region, mcm):
                     parsed_yaml_config = yaml.safe_load(pipeline_configuration)
                     sub_pipeline_name = \
                         [key for key in parsed_yaml_config.keys() if
-                         key != 'version' and key != 'pipeline_configurations'][
+                         key != 'version' and key != 'extension'][
                             0]
                     source_name = [key for key in parsed_yaml_config[sub_pipeline_name]['source'].keys()][0]
 
