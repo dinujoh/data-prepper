@@ -18,6 +18,8 @@ if [ -z $STAGE ]; then
     exit 1
 fi
 
+CSV_FILE="$REGION-$STAGE-patch-list.csv"
+
 args=("$@")
 BATCH_SIZE=10
 nextArg=0
@@ -27,10 +29,13 @@ while [[ $nextArg -lt $# ]]; do
         nextArg=$nextArg+1
         BATCH_SIZE=${args[$nextArg]}
     fi
+    # file override argument
+    if [[ $arg == "--file" ]]; then
+        nextArg=$nextArg+1
+        CSV_FILE=${args[$nextArg]}
+    fi
     nextArg=$nextArg+1
 done
-
-CSV_FILE="$REGION-$STAGE-patch-list.csv"
 
 # Check if the CSV file exists
 if [ ! -f "$CSV_FILE" ]; then
