@@ -151,19 +151,28 @@ def get_service_info(ecs_client, cluster_arn: str, service_arn: str) -> Optional
         return None
 
 
-def create_new_task_definition_with_env_var(ecs_client, task_def_arn: str, region: str, cell_account_id: str) -> Optional[str]:
+def create_new_task_definition_with_env_var(ecs_client, task_def_arn: str, region: str, metering_account_id: str) -> Optional[str]:
     """Create new task definition with METERING_EVENT_BUS_ARN added. Returns None if already present."""
     try:
         response = ecs_client.describe_task_definition(taskDefinition=task_def_arn)
         task_def = response['taskDefinition']
 
-        # Check if env var already exists
+        # Check if env var already exists with correct value
+        expected_value = f"arn:aws:events:{region}:{metering_account_id}:event-bus/{EVENT_BUS_NAME}"
+        env_var_found = False
         for container in task_def['containerDefinitions']:
             if container['name'] == CONTAINER_NAME:
                 for env_var in container.get('environment', []):
                     if env_var['name'] == ENV_VAR_NAME:
-                        print(f"  ⚠️  {ENV_VAR_NAME} already exists — skipping")
-                        return None
+                        if env_var['value'] == expected_value:
+                            print(f"  ⚠️  {ENV_VAR_NAME} already correct — skipping")
+                            return None
+                        print(f"  ⚠️  {ENV_VAR_NAME} has wrong value, replacing")
+                        print(f"    Old: {env_var['value']}")
+                        print(f"    New: {expected_value}")
+                        env_var['value'] = expected_value
+                        env_var_found = True
+                        break
                 break
         else:
             print(f"  ❌ Container '{CONTAINER_NAME}' not found")
@@ -180,14 +189,15 @@ def create_new_task_definition_with_env_var(ecs_client, task_def_arn: str, regio
                       'compatibilities', 'registeredAt', 'registeredBy']:
             task_def.pop(field, None)
 
-        # Add env var
-        event_bus_arn = f"arn:aws:events:{region}:{cell_account_id}:event-bus/{EVENT_BUS_NAME}"
-        for container in task_def['containerDefinitions']:
-            if container['name'] == CONTAINER_NAME:
-                container.setdefault('environment', []).append({
-                    'name': ENV_VAR_NAME, 'value': event_bus_arn
-                })
-                break
+        # Add env var if not already replaced inline
+        if not env_var_found:
+            for container in task_def['containerDefinitions']:
+                if container['name'] == CONTAINER_NAME:
+                    container.setdefault('environment', []).append({
+                        'name': ENV_VAR_NAME, 'value': expected_value
+                    })
+                    print(f"  Adding {ENV_VAR_NAME}={expected_value}")
+                    break
 
         response = ecs_client.register_task_definition(**task_def)
         new_task_def_arn = response['taskDefinition']['taskDefinitionArn']
@@ -358,7 +368,7 @@ def process_pipeline(pipeline_arn: str, region: str, cp_dynamodb,
 
     # Create new task definition
     new_task_def_arn = create_new_task_definition_with_env_var(
-        dp_ecs, service_info['taskDefinition'], region, cell_account
+        dp_ecs, service_info['taskDefinition'], region, metering_account
     )
     if not new_task_def_arn:
         return None
@@ -422,11 +432,15 @@ def verify_pipeline(pipeline_arn: str, region: str, cp_dynamodb,
     try:
         response = dp_ecs.describe_task_definition(taskDefinition=current_task_def)
         task_def = response['taskDefinition']
+        expected_value = f"arn:aws:events:{region}:{REGION_ACCOUNTS[region]['metering']}:event-bus/{EVENT_BUS_NAME}"
         for container in task_def['containerDefinitions']:
             if container['name'] == CONTAINER_NAME:
                 for env_var in container.get('environment', []):
                     if env_var['name'] == ENV_VAR_NAME:
-                        result['env_var'] = True
+                        if env_var['value'] == expected_value:
+                            result['env_var'] = True
+                        else:
+                            print(f"{prefix} ⚠️  Env var has wrong value: {env_var['value']}")
                         break
                 break
     except Exception as e:
@@ -479,6 +493,8 @@ def main():
     parser.add_argument('--metering-account', help='Metering account ID (required with --pipeline-arns, inferred from CSV)')
     parser.add_argument('--no-wait', action='store_true', help='Skip deployment monitoring and billing update')
     parser.add_argument('--verify', action='store_true', help='Verify only — check env var and billing table without deploying')
+    parser.add_argument('--rerun-succeeded', action='store_true', help='Only process rows with status=succeeded (for fixing env var values)')
+    parser.add_argument('--rerun-failed', action='store_true', help='Only process rows with status=failed')
     parser.add_argument('--batch-size', type=int, help='Process pipelines in batches of this size, waiting for each batch to complete before starting the next')
 
     args = parser.parse_args()
@@ -501,6 +517,12 @@ def main():
         elif args.verify:
             # Verify mode: check rows that already have a status
             rows = [r for r in all_rows if r.get('status')]
+        elif args.rerun_succeeded:
+            # Rerun only succeeded rows (e.g., to fix env var values)
+            rows = [r for r in all_rows if r.get('status') == 'succeeded']
+        elif args.rerun_failed:
+            # Rerun all non-succeeded rows
+            rows = [r for r in all_rows if r.get('status') != 'succeeded']
         else:
             # Deploy mode: process only rows without a status
             rows = [r for r in all_rows if not r.get('status')]
