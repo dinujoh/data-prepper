@@ -74,6 +74,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -281,6 +282,85 @@ public class BulkIngesterTest {
         assertThat(failedDlqDataResult.getMessage().startsWith("Unable to convert the result of evaluating document_version"), equalTo(true));
 
         verify(dynamicDocumentVersionDroppedEvents).increment();
+    }
+
+    @Test
+    void output_when_document_build_fails_sends_event_to_DLQ_and_continues() throws IOException {
+        final Event event = mock(JacksonEvent.class);
+        final String eventJson = UUID.randomUUID().toString();
+        when(event.toJsonString()).thenReturn(eventJson);
+        final EventHandle eventHandle = mock(EventHandle.class);
+        when(event.getEventHandle()).thenReturn(eventHandle);
+        final String index = UUID.randomUUID().toString();
+        when(event.formatString(indexConfiguration.getIndexAlias(), expressionEvaluator)).thenReturn(index);
+
+        final BulkIngester objectUnderTest = createObjectUnderTest();
+        initializeIngester(objectUnderTest);
+        when(indexManager.getIndexName(anyString())).thenReturn(index);
+
+        final ArgumentCaptor<FailedDlqData> failedDlqData = ArgumentCaptor.forClass(FailedDlqData.class);
+        final DlqObject.Builder dlqObjectBuilder = mockDlqObjectBuilder(eventHandle, failedDlqData);
+
+        final String failureMessage = "TextBuffer overrun: size reached (2147483648) exceeds maximum of 2147483647";
+        try (final MockedStatic<DocumentBuilder> documentBuilderMockedStatic = mockStatic(DocumentBuilder.class);
+             final MockedStatic<DlqObject> dlqObjectMockedStatic = mockStatic(DlqObject.class)) {
+            documentBuilderMockedStatic.when(() -> DocumentBuilder.build(eq(event), eq(null), eq(null), eq(null), eq(null)))
+                    .thenThrow(new RuntimeException(failureMessage));
+            dlqObjectMockedStatic.when(DlqObject::builder).thenReturn(dlqObjectBuilder);
+            objectUnderTest.output(List.of(new Record<>(event)));
+        }
+
+        final FailedDlqData failedDlqDataResult = failedDlqData.getValue();
+        assertThat(failedDlqDataResult.getDocument(), equalTo(eventJson));
+        assertThat(failedDlqDataResult.getIndex(), equalTo(index));
+        assertThat(failedDlqDataResult.getMessage(), equalTo(failureMessage));
+        verify(eventActionResolver, never()).resolveAction(any(Event.class), anyString());
+    }
+
+    @Test
+    void output_when_document_build_and_event_serialization_fail_sends_empty_document_to_DLQ() throws IOException {
+        final Event event = mock(JacksonEvent.class);
+        final String failureMessage = UUID.randomUUID().toString();
+        when(event.toJsonString()).thenThrow(new RuntimeException(failureMessage));
+        final EventHandle eventHandle = mock(EventHandle.class);
+        when(event.getEventHandle()).thenReturn(eventHandle);
+        final String index = UUID.randomUUID().toString();
+        when(event.formatString(indexConfiguration.getIndexAlias(), expressionEvaluator)).thenReturn(index);
+
+        final BulkIngester objectUnderTest = createObjectUnderTest();
+        initializeIngester(objectUnderTest);
+        when(indexManager.getIndexName(anyString())).thenReturn(index);
+
+        final ArgumentCaptor<FailedDlqData> failedDlqData = ArgumentCaptor.forClass(FailedDlqData.class);
+        final DlqObject.Builder dlqObjectBuilder = mockDlqObjectBuilder(eventHandle, failedDlqData);
+
+        try (final MockedStatic<DocumentBuilder> documentBuilderMockedStatic = mockStatic(DocumentBuilder.class);
+             final MockedStatic<DlqObject> dlqObjectMockedStatic = mockStatic(DlqObject.class)) {
+            documentBuilderMockedStatic.when(() -> DocumentBuilder.build(eq(event), eq(null), eq(null), eq(null), eq(null)))
+                    .thenThrow(new RuntimeException(failureMessage));
+            dlqObjectMockedStatic.when(DlqObject::builder).thenReturn(dlqObjectBuilder);
+            objectUnderTest.output(List.of(new Record<>(event)));
+        }
+
+        final FailedDlqData failedDlqDataResult = failedDlqData.getValue();
+        assertThat(failedDlqDataResult.getDocument(), equalTo("{}"));
+        assertThat(failedDlqDataResult.getMessage(), equalTo(failureMessage));
+        verify(eventActionResolver, never()).resolveAction(any(Event.class), anyString());
+    }
+
+    private DlqObject.Builder mockDlqObjectBuilder(final EventHandle eventHandle,
+                                                   final ArgumentCaptor<FailedDlqData> failedDlqData) {
+        final DlqObject dlqObject = mock(DlqObject.class);
+        final DlqObject.Builder dlqObjectBuilder = mock(DlqObject.Builder.class);
+        when(dlqObjectBuilder.withEventHandle(eventHandle)).thenReturn(dlqObjectBuilder);
+        when(dlqObjectBuilder.withFailedData(failedDlqData.capture())).thenReturn(dlqObjectBuilder);
+        when(dlqObjectBuilder.withPluginName("opensearch")).thenReturn(dlqObjectBuilder);
+        when(dlqObjectBuilder.withPluginId("opensearch")).thenReturn(dlqObjectBuilder);
+        when(dlqObjectBuilder.withPipelineName(pipeline)).thenReturn(dlqObjectBuilder);
+        when(dlqObject.getFailedData()).thenReturn(mock(FailedDlqData.class));
+        doNothing().when(dlqObject).releaseEventHandle(false);
+        when(dlqObjectBuilder.build()).thenReturn(dlqObject);
+        return dlqObjectBuilder;
     }
 
     @ParameterizedTest

@@ -86,6 +86,7 @@ import static org.opensearch.dataprepper.logging.DataPrepperMarkers.NOISY;
 public class BulkIngester implements Ingester {
     private static final Logger LOG = LoggerFactory.getLogger(BulkIngester.class);
     private static final String PLUGIN_NAME = "opensearch";
+    private static final String UNSERIALIZABLE_EVENT_DOCUMENT = "{}";
 
     private final OpenSearchSinkConfiguration openSearchSinkConfig;
     private final ExpressionEvaluator expressionEvaluator;
@@ -325,7 +326,15 @@ public class BulkIngester implements Ingester {
                 continue;
             }
 
-            SerializedJson document = getDocument(event);
+            SerializedJson document;
+            try {
+                document = getDocument(event);
+            } catch (final RuntimeException e) {
+                LOG.error(NOISY, "Failed to build the document for an Event. Check the dlq if configured to see details about the affected Event: {}",
+                        e.getMessage(), e);
+                logFailureForDlqObjects(failurePipeline, List.of(createDlqObjectFromEvent(event, indexName, e.getMessage())), e);
+                continue;
+            }
 
             Long version = null;
             String versionExpressionEvaluationResult = null;
@@ -601,7 +610,7 @@ public class BulkIngester implements Ingester {
                                                final String message) {
         DlqObject.Builder builder = DlqObject.builder()
                 .withFailedData(FailedDlqData.builder()
-                        .withDocument(event.toJsonString())
+                        .withDocument(serializeEventForDlq(event))
                         .withIndex(index)
                         .withMessage(message != null ? message : "")
                         .build())
@@ -615,6 +624,15 @@ public class BulkIngester implements Ingester {
             builder.withEventHandle(event.getEventHandle());
         }
         return builder.build();
+    }
+
+    private static String serializeEventForDlq(final Event event) {
+        try {
+            return event.toJsonString();
+        } catch (final RuntimeException e) {
+            LOG.warn(NOISY, "Unable to serialize the Event for the DLQ, writing an empty document instead: {}", e.getMessage());
+            return UNSERIALIZABLE_EVENT_DOCUMENT;
+        }
     }
 
     private boolean isUsingDocumentFilters() {
