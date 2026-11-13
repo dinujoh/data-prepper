@@ -15,6 +15,7 @@ import com.linecorp.armeria.common.annotation.Nullable;
 import com.linecorp.armeria.common.grpc.GoogleGrpcExceptionHandlerFunction;
 import com.linecorp.armeria.common.util.Exceptions;
 import com.linecorp.armeria.server.RequestTimeoutException;
+import com.linecorp.armeria.server.ServiceRequestContext;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.micrometer.core.instrument.Counter;
@@ -44,13 +45,25 @@ public class GrpcRequestExceptionHandler implements GoogleGrpcExceptionHandlerFu
     private final Counter requestsTooLargeCounter;
     private final Counter internalServerErrorCounter;
     private final RetryInfoCalculator retryInfoCalculator;
+    private final boolean closeConnectionOnResourceExhausted;
 
     public GrpcRequestExceptionHandler(final PluginMetrics pluginMetrics, Duration retryInfoMinDelay, Duration retryInfoMaxDelay) {
+        this(pluginMetrics, retryInfoMinDelay, retryInfoMaxDelay, false);
+    }
+
+    /**
+     * @param closeConnectionOnResourceExhausted when true, a RESOURCE_EXHAUSTED response also asks the client to
+     *                                           close the connection (Connection: close on HTTP/1.1, GOAWAY on
+     *                                           HTTP/2), so that its next request can be balanced to another node.
+     */
+    public GrpcRequestExceptionHandler(final PluginMetrics pluginMetrics, Duration retryInfoMinDelay, Duration retryInfoMaxDelay,
+                                       final boolean closeConnectionOnResourceExhausted) {
         requestTimeoutsCounter = pluginMetrics.counter(REQUEST_TIMEOUTS);
         badRequestsCounter = pluginMetrics.counter(BAD_REQUESTS);
         requestsTooLargeCounter = pluginMetrics.counter(REQUESTS_TOO_LARGE);
         internalServerErrorCounter = pluginMetrics.counter(INTERNAL_SERVER_ERROR);
         retryInfoCalculator = new RetryInfoCalculator(retryInfoMinDelay, retryInfoMaxDelay);
+        this.closeConnectionOnResourceExhausted = closeConnectionOnResourceExhausted;
     }
 
     @Override
@@ -76,7 +89,13 @@ public class GrpcRequestExceptionHandler implements GoogleGrpcExceptionHandlerFu
     public com.google.rpc.@Nullable Status applyStatusProto(RequestContext ctx, Throwable throwable,
                                                             Metadata metadata) {
         final Throwable exceptionCause = throwable instanceof BufferWriteException ? throwable.getCause() : throwable;
-        return handleExceptions(exceptionCause);
+        final com.google.rpc.Status status = handleExceptions(exceptionCause);
+        if (closeConnectionOnResourceExhausted
+                && status.getCode() == Status.Code.RESOURCE_EXHAUSTED.value()
+                && ctx instanceof ServiceRequestContext) {
+            ((ServiceRequestContext) ctx).initiateConnectionShutdown();
+        }
+        return status;
     }
 
     private com.google.rpc.Status handleExceptions(final Throwable e) {

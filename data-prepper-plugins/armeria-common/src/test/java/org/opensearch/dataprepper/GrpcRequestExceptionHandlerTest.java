@@ -13,6 +13,7 @@ import com.google.protobuf.Any;
 import com.google.rpc.RetryInfo;
 import com.linecorp.armeria.common.RequestContext;
 import com.linecorp.armeria.server.RequestTimeoutException;
+import com.linecorp.armeria.server.ServiceRequestContext;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.micrometer.core.instrument.Counter;
@@ -40,6 +41,8 @@ import static com.linecorp.armeria.internal.common.grpc.MetadataUtil.GRPC_STATUS
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -228,5 +231,37 @@ public class GrpcRequestExceptionHandlerTest {
         assertThat(messageStatus.getDescription(), equalTo(exceptionMessage));
 
         verify(internalServerErrorCounter, times(2)).increment();
+    }
+
+    @Test
+    public void testResourceExhaustedClosesConnectionWhenEnabled() {
+        final GrpcRequestExceptionHandler handler = new GrpcRequestExceptionHandler(pluginMetrics, Duration.ofMillis(100), Duration.ofSeconds(2), true);
+        final ServiceRequestContext serviceRequestContext = mock(ServiceRequestContext.class);
+
+        final Status resultStatus = handler.apply(serviceRequestContext, Status.DEADLINE_EXCEEDED,
+                new BufferWriteException(null, new TimeoutException()), metadata);
+
+        assertThat(resultStatus.getCode(), equalTo(Status.Code.RESOURCE_EXHAUSTED));
+        verify(serviceRequestContext).initiateConnectionShutdown();
+    }
+
+    @Test
+    public void testResourceExhaustedDoesNotCloseConnectionByDefault() {
+        final ServiceRequestContext serviceRequestContext = mock(ServiceRequestContext.class);
+
+        grpcRequestExceptionHandler.apply(serviceRequestContext, Status.DEADLINE_EXCEEDED,
+                new BufferWriteException(null, new TimeoutException()), metadata);
+
+        verify(serviceRequestContext, never()).initiateConnectionShutdown();
+    }
+
+    @Test
+    public void testBadRequestDoesNotCloseConnectionWhenEnabled() {
+        final GrpcRequestExceptionHandler handler = new GrpcRequestExceptionHandler(pluginMetrics, Duration.ofMillis(100), Duration.ofSeconds(2), true);
+        final ServiceRequestContext serviceRequestContext = mock(ServiceRequestContext.class);
+
+        handler.apply(serviceRequestContext, Status.INVALID_ARGUMENT, new BadRequestException("bad", new IOException()), metadata);
+
+        verify(serviceRequestContext, never()).initiateConnectionShutdown();
     }
 }

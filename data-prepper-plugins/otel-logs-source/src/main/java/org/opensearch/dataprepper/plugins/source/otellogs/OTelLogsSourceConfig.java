@@ -140,6 +140,9 @@ public class OTelLogsSourceConfig {
     @DurationMax(hours = 1)
     private Duration connectionDrainDuration;
 
+    @JsonProperty("close_connection_on_throttle")
+    private boolean closeConnectionOnThrottle;
+
     @AssertTrue(message = "path should start with /")
     boolean isPathValid() {
         return path == null || path.startsWith("/");
@@ -272,6 +275,10 @@ public class OTelLogsSourceConfig {
 
     public Duration getConnectionDrainDuration() {
         return connectionDrainDuration;
+    }
+
+    public boolean closeConnectionOnThrottle() {
+        return closeConnectionOnThrottle;
     }
 }
 

@@ -312,6 +312,7 @@ public class OTelLogsSource implements Source<Record<Object>> {
                 ? config.getRetryInfo()
                 : new RetryInfoConfig();
 
-        return new GrpcRequestExceptionHandler(pluginMetrics, retryInfo.getMinDelay(), retryInfo.getMaxDelay());
+        return new GrpcRequestExceptionHandler(pluginMetrics, retryInfo.getMinDelay(), retryInfo.getMaxDelay(),
+                config.closeConnectionOnThrottle());
     }
 }
