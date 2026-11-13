@@ -45,6 +45,15 @@ import org.opensearch.dataprepper.plugins.otel.codec.OTelLogsDecoder;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.rpc.RetryInfo;
 import com.linecorp.armeria.client.Clients;
+import com.linecorp.armeria.client.WebClient;
+import com.linecorp.armeria.common.AggregatedHttpResponse;
+import com.linecorp.armeria.common.HttpData;
+import com.linecorp.armeria.common.HttpHeaderNames;
+import com.linecorp.armeria.common.HttpMethod;
+import com.linecorp.armeria.common.HttpStatus;
+import com.linecorp.armeria.common.MediaType;
+import com.linecorp.armeria.common.RequestHeaders;
+import com.linecorp.armeria.common.SessionProtocol;
 
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
@@ -92,6 +101,7 @@ class OtelLogsSource_RetryInfoTest {
         when(oTelLogsSourceConfig.getRetryInfo()).thenReturn(TEST_RETRY_INFO);
         when(oTelLogsSourceConfig.getHttpPath()).thenReturn(CONFIG_HTTP_PATH);
         when(oTelLogsSourceConfig.getPath()).thenReturn(CONFIG_GRPC_PATH);
+        when(oTelLogsSourceConfig.enableUnframedRequests()).thenReturn(true);
 
         when(pluginFactory.loadPlugin(eq(GrpcAuthenticationProvider.class), any(PluginSetting.class)))
                 .thenReturn(authenticationProvider);
@@ -122,6 +132,23 @@ class OtelLogsSource_RetryInfoTest {
 
         RetryInfo retryInfo = extractRetryInfoFromStatusRuntimeException(statusRuntimeException);
         assertThat(Duration.ofNanos(retryInfo.getRetryDelay().getNanos()).toMillis(), equalTo(100L));
+    }
+
+    @Test
+    public void unframed_gRPC_failed_request_returns_429_with_retry_after_header() {
+        final AggregatedHttpResponse response = WebClient.of().execute(RequestHeaders.builder()
+                                .scheme(SessionProtocol.HTTP)
+                                .authority("127.0.0.1:21892")
+                                .method(HttpMethod.POST)
+                                .path(CONFIG_GRPC_PATH)
+                                .contentType(MediaType.PROTOBUF)
+                                .build(),
+                        HttpData.wrap(createExportLogsRequest().toByteArray()))
+                .aggregate()
+                .join();
+
+        assertThat(response.status(), equalTo(HttpStatus.TOO_MANY_REQUESTS));
+        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER), equalTo("1"));
     }
 
     @Test

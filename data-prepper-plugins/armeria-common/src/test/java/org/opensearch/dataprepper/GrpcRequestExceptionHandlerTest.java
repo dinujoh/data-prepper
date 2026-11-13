@@ -11,14 +11,18 @@ package org.opensearch.dataprepper;
 
 import com.google.protobuf.Any;
 import com.google.rpc.RetryInfo;
+import com.linecorp.armeria.common.HttpHeaderNames;
 import com.linecorp.armeria.common.RequestContext;
 import com.linecorp.armeria.server.RequestTimeoutException;
+import com.linecorp.armeria.server.ServiceRequestContext;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.micrometer.core.instrument.Counter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
@@ -40,6 +44,10 @@ import static com.linecorp.armeria.internal.common.grpc.MetadataUtil.GRPC_STATUS
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -228,5 +236,34 @@ public class GrpcRequestExceptionHandlerTest {
         assertThat(messageStatus.getDescription(), equalTo(exceptionMessage));
 
         verify(internalServerErrorCounter, times(2)).increment();
+    }
+
+    @Test
+    public void testResourceExhaustedSetsRetryAfterHeaderOnServiceRequestContext() {
+        final ServiceRequestContext serviceRequestContext = mock(ServiceRequestContext.class);
+        final BufferWriteException timeoutException = new BufferWriteException(null, new TimeoutException());
+
+        final Status resultStatus = grpcRequestExceptionHandler.apply(serviceRequestContext, Status.DEADLINE_EXCEEDED, timeoutException, metadata);
+
+        assertThat(resultStatus.getCode(), equalTo(Status.Code.RESOURCE_EXHAUSTED));
+        verify(serviceRequestContext).setAdditionalResponseHeader(HttpHeaderNames.RETRY_AFTER, "1");
+    }
+
+    @Test
+    public void testNonRetryableStatusDoesNotSetRetryAfterHeader() {
+        final ServiceRequestContext serviceRequestContext = mock(ServiceRequestContext.class);
+        final BadRequestException badRequestException = new BadRequestException("bad", new IOException());
+
+        grpcRequestExceptionHandler.apply(serviceRequestContext, Status.INVALID_ARGUMENT, badRequestException, metadata);
+
+        verify(serviceRequestContext, never()).setAdditionalResponseHeader(eq(HttpHeaderNames.RETRY_AFTER), any(CharSequence.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 0, 1", "0, 100000000, 1", "1, 0, 1", "1, 1, 2", "2, 0, 2", "2, 500000000, 3"})
+    public void testToRetryAfterSecondsRoundsUpToWholeSeconds(final long seconds, final int nanos, final long expected) {
+        final com.google.protobuf.Duration delay = com.google.protobuf.Duration.newBuilder().setSeconds(seconds).setNanos(nanos).build();
+
+        assertThat(GrpcRequestExceptionHandler.toRetryAfterSeconds(delay), equalTo(expected));
     }
 }

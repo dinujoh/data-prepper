@@ -10,11 +10,15 @@
 package org.opensearch.dataprepper;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.rpc.RetryInfo;
+import com.linecorp.armeria.common.HttpHeaderNames;
 import com.linecorp.armeria.common.RequestContext;
 import com.linecorp.armeria.common.annotation.Nullable;
 import com.linecorp.armeria.common.grpc.GoogleGrpcExceptionHandlerFunction;
 import com.linecorp.armeria.common.util.Exceptions;
 import com.linecorp.armeria.server.RequestTimeoutException;
+import com.linecorp.armeria.server.ServiceRequestContext;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.micrometer.core.instrument.Counter;
@@ -76,7 +80,39 @@ public class GrpcRequestExceptionHandler implements GoogleGrpcExceptionHandlerFu
     public com.google.rpc.@Nullable Status applyStatusProto(RequestContext ctx, Throwable throwable,
                                                             Metadata metadata) {
         final Throwable exceptionCause = throwable instanceof BufferWriteException ? throwable.getCause() : throwable;
-        return handleExceptions(exceptionCause);
+        final com.google.rpc.Status status = handleExceptions(exceptionCause);
+        if (status.getCode() == Status.Code.RESOURCE_EXHAUSTED.value()) {
+            addRetryAfterHeader(ctx, status);
+        }
+        return status;
+    }
+
+    /**
+     * Mirrors the RetryInfo delay into an HTTP Retry-After header. Clients that use unframed gRPC
+     * (for example the OpenTelemetry Collector otlphttp exporter) see RESOURCE_EXHAUSTED as HTTP 429 and
+     * only honour Retry-After, not the RetryInfo detail in the gRPC status.
+     */
+    private static void addRetryAfterHeader(final RequestContext ctx, final com.google.rpc.Status status) {
+        if (!(ctx instanceof ServiceRequestContext)) {
+            return;
+        }
+        for (final Any detail : status.getDetailsList()) {
+            if (detail.is(RetryInfo.class)) {
+                try {
+                    final com.google.protobuf.Duration delay = detail.unpack(RetryInfo.class).getRetryDelay();
+                    ((ServiceRequestContext) ctx).setAdditionalResponseHeader(
+                            HttpHeaderNames.RETRY_AFTER, String.valueOf(toRetryAfterSeconds(delay)));
+                } catch (final InvalidProtocolBufferException e) {
+                    LOG.debug("Unable to read RetryInfo to set the Retry-After header", e);
+                }
+                return;
+            }
+        }
+    }
+
+    static long toRetryAfterSeconds(final com.google.protobuf.Duration delay) {
+        final long seconds = delay.getSeconds() + (delay.getNanos() > 0 ? 1 : 0);
+        return Math.max(1L, seconds);
     }
 
     private com.google.rpc.Status handleExceptions(final Throwable e) {
